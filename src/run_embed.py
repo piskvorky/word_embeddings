@@ -45,6 +45,9 @@ def most_similar(model, positive=[], negative=[], topn=10):
     Find the top-N most similar words. Positive words contribute positively towards the
     similarity, negative words negatively.
 
+    `model.word_vectors` must be a matrix of word embeddings (already L2-normalized),
+    and its format must be either 2d numpy (dense) or scipy.sparse.csr.
+
     """
     if isinstance(positive, basestring) and not negative:
         # allow calls like most_similar('dog'), as a shorthand for most_similar(['dog'])
@@ -256,11 +259,11 @@ class PmiModel(object):
 
 class SvdModel(object):
     def __init__(self, corpus, id2word, s_exponent=0.0):
-        logger.info("")
-        lsi = gensim.models.LsiModel(corpus, id2word=id2word, num_topics=DIM)
+        logger.info("calculating truncated SVD")
+        lsi = gensim.models.LsiModel(corpus, id2word=id2word, num_topics=DIM, chunksize=1000)
         self.singular_scaled = lsi.projection.s ** s_exponent
-        # scale the left singular vectors by (scaled) singular values
-        self.word_vectors = numpy.dot(lsi.projection.u, self.singular_scaled)
+        # embeddings = left singular vectors scaled by the (exponentiated) singular values
+        self.word_vectors = lsi.projection.u * self.singular_scaled
 
 
 if __name__ == "__main__":
@@ -361,7 +364,7 @@ if __name__ == "__main__":
             model = utils.unpickle(outf('svd'))
         else:
             logger.info("SVD model not found, creating")
-            model = SvdModel(gensim.corpora.MmCorpus(outf('pmi_matrix.mm')), id2word)
+            model = SvdModel(gensim.corpora.MmCorpus(outf('pmi_matrix.mm')), id2word, s_exponent=0.0)
             model.word2id = word2id
             model.id2word = id2word
             utils.pickle(model, outf('svd'))
