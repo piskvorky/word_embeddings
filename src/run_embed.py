@@ -219,6 +219,8 @@ if __name__ == "__main__":
     q_file = sys.argv[2]
     filenames = "%s_vocab%s_doc%s_window%s%s"
     outf = lambda prefix: os.path.join(sys.argv[3], filenames % (prefix, TOKEN_LIMIT, DOC_LIMIT, WINDOW, '_dynamic' if DYNAMIC_WINDOW else ''))
+    logger.info("output file template will be %s" % outf('PREFIX'))
+
     sentences = lambda: itertools.islice(in_file, DOC_LIMIT)
 
     # use only a small subset of all words; otherwise the methods based on matrix
