@@ -163,69 +163,6 @@ def accuracy(model, questions, ok_words=None):
     return sections
 
 
-def _get_cooccur(corpus, word2id, window, dynamic_window=False):
-    """
-    Get raw (word x context) => int cooccurence counts, from the `corpus` stream of
-    sentences (generator).
-
-    The (word x context) pairs are encoded as a single integer: `len(word2id) * word_id + context_id`
-
-    """
-    logger.info("counting raw co-occurrence counts")
-    cooccur = defaultdict(int)  # the keys are actually encoded as a single int, to save memory
-    for sentence_no, sentence in enumerate(corpus):
-        if sentence_no % 100000 == 0:
-            logger.info("processing sentence #%i" % sentence_no)
-        for pos, word in enumerate(sentence):
-            if word not in word2id:
-                continue  # OOV word in the input sentence => skip
-            key = word2id[word] * len(word2id)
-            reduced_window = numpy.random.randint(window) if dynamic_window else 0
-            start = max(0, pos - window + reduced_window)
-            for pos2, word2 in enumerate(sentence[start : pos + window + 1 - reduced_window], start):
-                if word2 not in word2id or pos2 == pos:
-                    continue  # skip OOV and the target word itself
-                cooccur[key + word2id[word2]] += 1
-    logger.info("%i total count, %i non-zeros in raw co-occurrence matrix" %
-        (sum(cooccur.itervalues()), len(cooccur)))
-    return cooccur
-
-def _raw2ppmi(cooccur, word2id):
-    """
-    Convert raw counts from `get_coccur` into PPMI (positive PMI) values, as per Levy & Goldberg.
-
-    The result is an efficient stream of sparse word vectors (=no extra data copy).
-
-    """
-    logger.info("calculating marginal counts for each word & context")
-    marginal_target = defaultdict(int)
-    marginal_context = defaultdict(int)
-    for key, count in cooccur.iteritems():
-        target, context = key / len(word2id), key % len(word2id)
-        marginal_target[target] += count
-        marginal_context[context] += count
-
-    total = 1.0 * sum(marginal_target.itervalues())
-
-    logger.info("converting counts into PMI scores")
-    target_id, vector = 0, []
-    for key in sorted(cooccur):  # essentially groupby, but more readable
-        target, context = key / len(word2id), key % len(word2id)
-        while target_id < target:
-            yield matutils.unitvec(vector)  # normalize each word vector to unit length
-            vector = []
-            target_id += 1
-        pmi_score = numpy.log(total / marginal_target[target] / marginal_context[context] * cooccur[key])
-        if pmi_score > 0.0:
-            vector.append((context, pmi_score))
-
-    # return the remaining context vectors, too
-    while target_id < len(word2id):
-        yield matutils.unitvec(vector)  # normalize each word vector to unit length
-        vector = []
-        target_id += 1
-
-
 def raw2ppmi(cooccur, word2id):
     """
     Convert raw counts from `get_coccur` into positive PMI values (as per Levy & Goldberg),
@@ -253,7 +190,8 @@ def raw2ppmi(cooccur, word2id):
 
 class PmiModel(object):
     def __init__(self, corpus):
-        # serialize PPMI vectors into an explicit CSC matrix, in RAM
+        # serialize PPMI vectors into an explicit CSR matrix, in RAM, so we can do
+        # dot products easily
         self.word_vectors = matutils.corpus2csc(corpus).T
 
 
@@ -279,7 +217,8 @@ if __name__ == "__main__":
     # in_file = gensim.models.word2vec.LineSentence(sys.argv[1])
     in_file = gensim.models.word2vec.Text8Corpus(sys.argv[1])
     q_file = sys.argv[2]
-    outf = lambda prefix: os.path.join(sys.argv[3], "%s_%s%s" % (prefix, DOC_LIMIT, '_dynamic' if DYNAMIC_WINDOW else ''))
+    filenames = "%s_vocab%s_doc%s_window%s%s"
+    outf = lambda prefix: os.path.join(sys.argv[3], filenames % (prefix, TOKEN_LIMIT, DOC_LIMIT, WINDOW, '_dynamic' if DYNAMIC_WINDOW else ''))
     sentences = lambda: itertools.islice(in_file, DOC_LIMIT)
 
     # use only a small subset of all words; otherwise the methods based on matrix
@@ -353,7 +292,7 @@ if __name__ == "__main__":
                 gensim.corpora.MmCorpus.serialize(outf('pmi_matrix.mm'), raw2ppmi(raw, word2id))
                 del raw
 
-            model = PmiModel(gensim.corpora.MmCorpus(outf('pmi_matrix.mm')), word2id)
+            model = PmiModel(gensim.corpora.MmCorpus(outf('pmi_matrix.mm')))
             model.word2id = word2id
             model.id2word = id2word
             utils.pickle(model, outf('pmi'))
