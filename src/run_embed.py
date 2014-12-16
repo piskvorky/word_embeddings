@@ -9,7 +9,7 @@ USAGE: %(program)s INPUT_FILE QUESTIONS OUTPUT_DIR
 
 Compare various word embedding techniques on the analogy task.
 
-Example: python ./run_word2vec.py /data/shootout/title_tokens.txt.gz /data/embeddings/questions-words.txt ./results
+Example: python ./run_word2vec.py /data/shootout/title_tokens.txt.gz /data/embeddings/questions-words.txt ./results_dim300_vocab30k
 
 """
 
@@ -217,8 +217,7 @@ if __name__ == "__main__":
     # in_file = gensim.models.word2vec.LineSentence(sys.argv[1])
     in_file = gensim.models.word2vec.Text8Corpus(sys.argv[1])
     q_file = sys.argv[2]
-    filenames = "%s_vocab%s_doc%s_window%s%s"
-    outf = lambda prefix: os.path.join(sys.argv[3], filenames % (prefix, TOKEN_LIMIT, DOC_LIMIT, WINDOW, '_dynamic' if DYNAMIC_WINDOW else ''))
+    outf = lambda prefix: os.path.join(sys.argv[3], prefix)
     logger.info("output file template will be %s" % outf('PREFIX'))
 
     sentences = lambda: itertools.islice(in_file, DOC_LIMIT)
