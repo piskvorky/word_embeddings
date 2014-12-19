@@ -289,13 +289,13 @@ if __name__ == "__main__":
             logger.info("PMI model not found, creating")
             if not os.path.exists(outf('pmi_matrix.mm')):
                 logger.info("PMI matrix not found, creating")
-                if os.path.exists(outf('cooccur')):
+                if os.path.exists(outf('cooccur.npy')):
                     logger.info("raw cooccurrence matrix found, loading")
-                    raw = numpy.load(outf('cooccur'))
+                    raw = numpy.load(outf('cooccur.npy'))
                 else:
                     logger.info("raw cooccurrence matrix not found, creating")
                     raw = get_cooccur(corpus(), word2id, window=WINDOW, dynamic_window=False)
-                    numpy.save(outf('cooccur'), raw)
+                    numpy.save(outf('cooccur.npy'), raw)
                 # store the PPMI matrix in sparse Matrix Market format on disk
                 gensim.corpora.MmCorpus.serialize(outf('pmi_matrix.mm'), raw2ppmi(raw, word2id, k_shift=NEGATIVE))
                 del raw
