@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 #
-# Copyright (C) 2013 Radim Rehurek <me@radimrehurek.com>
+# Copyright (C) 2014 Radim Rehurek <me@radimrehurek.com>
 # Licensed under the GNU LGPL v2.1 - http://www.gnu.org/licenses/lgpl.html
 
 """
@@ -172,15 +172,20 @@ def raw2ppmi(cooccur, word2id, k_shift=1.0):
 
     """
     logger.info("computing PPMI on co-occurence counts")
-    # tedious, trying to avoid making temporary copies
+
+    # following lines a bit tedious, as we try to avoid making temporary copies of the (large) `cooccur` matrix
     marginal_word = cooccur.sum(axis=1)
     marginal_context = cooccur.sum(axis=0)
-    cooccur /= marginal_word[:, None]
-    cooccur /= marginal_context
-    cooccur *= marginal_word.sum()
-    numpy.log(cooccur, out=cooccur)
-    cooccur -= numpy.log(k_shift)  # shifted PMI
-    cooccur.clip(0.0, out=cooccur)  # PPMI = allow only non-negative values
+    cooccur /= marginal_word[:, None]  # #(w, c) / #w
+    cooccur /= marginal_context  # #(w, c) / (#w * #c)
+    cooccur *= marginal_word.sum()  # #(w, c) * D / (#w * #c)
+    numpy.log(cooccur, out=cooccur)  # log(#(w, c) * D / (#w * #c))
+
+    logger.info("shifting PMI scores by log(k) with k=%s" % (k_shift, ))
+    cooccur -= numpy.log(k_shift)  # shifted PMI = log(#(w, c) * D / (#w * #c)) - log(k)
+
+    logger.info("clipping PMI scores to be non-negative PPMI")
+    cooccur.clip(0.0, out=cooccur)  # SPPMI = max(0, log(#(w, c) * D / (#w * #c)) - log(k))
 
     logger.info("normalizing PPMI word vectors to unit length")
     for i, vec in enumerate(cooccur):
@@ -191,8 +196,8 @@ def raw2ppmi(cooccur, word2id, k_shift=1.0):
 
 class PmiModel(object):
     def __init__(self, corpus):
-        # serialize PPMI vectors into an explicit CSR matrix, in RAM, so we can do
-        # dot products easily
+        # serialize PPMI vectors into an explicit sparse CSR matrix, in RAM, so we can do
+        # dot products more easily
         self.word_vectors = matutils.corpus2csc(corpus).T
 
 
@@ -296,7 +301,7 @@ if __name__ == "__main__":
                     logger.info("raw cooccurrence matrix not found, creating")
                     raw = get_cooccur(corpus(), word2id, window=WINDOW, dynamic_window=False)
                     numpy.save(outf('cooccur.npy'), raw)
-                # store the PPMI matrix in sparse Matrix Market format on disk
+                # store the SPPMI matrix in sparse Matrix Market format on disk
                 gensim.corpora.MmCorpus.serialize(outf('pmi_matrix.mm'), raw2ppmi(raw, word2id, k_shift=NEGATIVE))
                 del raw
 
