@@ -26,19 +26,19 @@ import scipy.sparse
 import gensim
 from gensim import utils, matutils
 
-import glove  # the one from https://github.com/maciejkula/glove-python
-
 DIM = 300
 DOC_LIMIT = None  # None for no limit
 TOKEN_LIMIT = 30000
 WORKERS = 8
 WINDOW = 10
 DYNAMIC_WINDOW = False
+NEGATIVE = 10  # 0 for plain hierarchical softmax (no negative sampling)
 
 logger = logging.getLogger("run_embed")
 
 import pyximport; pyximport.install()
 from cooccur_matrix import get_cooccur
+
 
 def most_similar(model, positive=[], negative=[], topn=10):
     """
@@ -163,7 +163,7 @@ def accuracy(model, questions, ok_words=None):
     return sections
 
 
-def raw2ppmi(cooccur, word2id):
+def raw2ppmi(cooccur, word2id, k_shift=1.0):
     """
     Convert raw counts from `get_coccur` into positive PMI values (as per Levy & Goldberg),
     in place.
@@ -179,7 +179,8 @@ def raw2ppmi(cooccur, word2id):
     cooccur /= marginal_context
     cooccur *= marginal_word.sum()
     numpy.log(cooccur, out=cooccur)
-    cooccur.clip(0, out=cooccur)  # PPMI = allow only non-negative values
+    cooccur -= numpy.log(k_shift)  # shifted PMI
+    cooccur.clip(0.0, out=cooccur)  # PPMI = allow only non-negative values
 
     logger.info("normalizing PPMI word vectors to unit length")
     for i, vec in enumerate(cooccur):
@@ -214,8 +215,8 @@ if __name__ == "__main__":
     if len(sys.argv) < 4:
         print(globals()['__doc__'] % locals())
         sys.exit(1)
-    # in_file = gensim.models.word2vec.LineSentence(sys.argv[1])
-    in_file = gensim.models.word2vec.Text8Corpus(sys.argv[1])
+    in_file = gensim.models.word2vec.LineSentence(sys.argv[1])
+    # in_file = gensim.models.word2vec.Text8Corpus(sys.argv[1])
     q_file = sys.argv[2]
     outf = lambda prefix: os.path.join(sys.argv[3], prefix)
     logger.info("output file template will be %s" % outf('PREFIX'))
@@ -244,7 +245,10 @@ if __name__ == "__main__":
             model = utils.unpickle(outf('w2v'))
         else:
             logger.info("word2vec model not found, creating")
-            model = gensim.models.Word2Vec(size=DIM, min_count=0, window=WINDOW, workers=WORKERS)
+            if NEGATIVE:
+                model = gensim.models.Word2Vec(size=DIM, min_count=0, window=WINDOW, workers=WORKERS, hs=0, negative=NEGATIVE)
+            else:
+                model = gensim.models.Word2Vec(size=DIM, min_count=0, window=WINDOW, workers=WORKERS)
             model.build_vocab(corpus())
             model.train(corpus())  # train with 1 epoch
             model.init_sims(replace=True)
@@ -258,6 +262,9 @@ if __name__ == "__main__":
             logger.info("glove model found, loading")
             model = utils.unpickle(outf('glove'))
         else:
+            # postpone importing glove until necessary (difficult compile)
+            import glove  # https://github.com/maciejkula/glove-python
+
             logger.info("glove model not found, creating")
             if os.path.exists(outf('glove_corpus')):
                 logger.info("glove corpus matrix found, loading")
@@ -290,7 +297,7 @@ if __name__ == "__main__":
                     raw = get_cooccur(corpus(), word2id, window=WINDOW, dynamic_window=False)
                     numpy.save(outf('cooccur'), raw)
                 # store the PPMI matrix in sparse Matrix Market format on disk
-                gensim.corpora.MmCorpus.serialize(outf('pmi_matrix.mm'), raw2ppmi(raw, word2id))
+                gensim.corpora.MmCorpus.serialize(outf('pmi_matrix.mm'), raw2ppmi(raw, word2id, k_shift=NEGATIVE))
                 del raw
 
             model = PmiModel(gensim.corpora.MmCorpus(outf('pmi_matrix.mm')))
