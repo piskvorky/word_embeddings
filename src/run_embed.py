@@ -26,7 +26,9 @@ import scipy.sparse
 import gensim
 from gensim import utils, matutils
 
-DIM = 300
+
+# parameters controlling what is to be computed: how many dimensions, window size etc.
+DIM = 600
 DOC_LIMIT = None  # None for no limit
 TOKEN_LIMIT = 30000
 WORKERS = 8
@@ -302,7 +304,7 @@ if __name__ == "__main__":
                     raw = get_cooccur(corpus(), word2id, window=WINDOW, dynamic_window=False)
                     numpy.save(outf('cooccur.npy'), raw)
                 # store the SPPMI matrix in sparse Matrix Market format on disk
-                gensim.corpora.MmCorpus.serialize(outf('pmi_matrix.mm'), raw2ppmi(raw, word2id, k_shift=NEGATIVE))
+                gensim.corpora.MmCorpus.serialize(outf('pmi_matrix.mm'), raw2ppmi(raw, word2id, k_shift=NEGATIVE or 1))
                 del raw
 
             model = PmiModel(gensim.corpora.MmCorpus(outf('pmi_matrix.mm')))
