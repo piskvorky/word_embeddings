@@ -26,6 +26,7 @@ import scipy.sparse
 import gensim
 from gensim import utils, matutils
 
+import glove  # https://github.com/maciejkula/glove-python
 
 # parameters controlling what is to be computed: how many dimensions, window size etc.
 DIM = 600
@@ -269,9 +270,6 @@ if __name__ == "__main__":
             logger.info("glove model found, loading")
             model = utils.unpickle(outf('glove'))
         else:
-            # postpone importing glove until necessary (difficult compile)
-            import glove  # https://github.com/maciejkula/glove-python
-
             logger.info("glove model not found, creating")
             if os.path.exists(outf('glove_corpus')):
                 logger.info("glove corpus matrix found, loading")
