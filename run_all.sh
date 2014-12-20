@@ -13,7 +13,6 @@ fi
 input_corpus=$1
 questions=$2
 outdir=$3
-shift 3
 
 mkdir -p $outdir 2> /dev/null
 

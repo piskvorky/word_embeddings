@@ -181,7 +181,7 @@ def raw2ppmi(cooccur, word2id, k_shift=1.0):
     cooccur /= marginal_word[:, None]  # #(w, c) / #w
     cooccur /= marginal_context  # #(w, c) / (#w * #c)
     cooccur *= marginal_word.sum()  # #(w, c) * D / (#w * #c)
-    numpy.log(cooccur, out=cooccur)  # log(#(w, c) * D / (#w * #c))
+    numpy.log(cooccur, out=cooccur)  # PMI = log(#(w, c) * D / (#w * #c))
 
     logger.info("shifting PMI scores by log(k) with k=%s" % (k_shift, ))
     cooccur -= numpy.log(k_shift)  # shifted PMI = log(#(w, c) * D / (#w * #c)) - log(k)
@@ -278,7 +278,7 @@ if __name__ == "__main__":
                 cooccur = utils.unpickle(outf('glove_corpus'))
             else:
                 logger.info("glove corpus matrix not found, creating")
-                cooccur = glove.Corpus()
+                cooccur = glove.Corpus(dictionary=word2id)
                 cooccur.fit(corpus(), window=WINDOW)
                 utils.pickle(cooccur, outf('glove_corpus'))
             model = glove.Glove(no_components=DIM, learning_rate=0.05)
