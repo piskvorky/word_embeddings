@@ -270,7 +270,6 @@ if __name__ == "__main__":
             logger.info("glove model found, loading")
             model = utils.unpickle(outf('glove'))
         else:
-            logger.info("glove model not found, creating")
             if os.path.exists(outf('glove_corpus')):
                 logger.info("glove corpus matrix found, loading")
                 cooccur = utils.unpickle(outf('glove_corpus'))
@@ -279,6 +278,7 @@ if __name__ == "__main__":
                 cooccur = glove.Corpus(dictionary=word2id)
                 cooccur.fit(corpus(), window=WINDOW)
                 utils.pickle(cooccur, outf('glove_corpus'))
+            logger.info("glove model not found, creating")
             model = glove.Glove(no_components=DIM, learning_rate=0.05)
             model.fit(cooccur.matrix, epochs=10, no_threads=WORKERS, verbose=True)
             model.add_dictionary(cooccur.dictionary)
@@ -291,7 +291,6 @@ if __name__ == "__main__":
             logger.info("PMI model found, loading")
             model = utils.unpickle(outf('pmi'))
         else:
-            logger.info("PMI model not found, creating")
             if not os.path.exists(outf('pmi_matrix.mm')):
                 logger.info("PMI matrix not found, creating")
                 if os.path.exists(outf('cooccur.npy')):
@@ -304,7 +303,7 @@ if __name__ == "__main__":
                 # store the SPPMI matrix in sparse Matrix Market format on disk
                 gensim.corpora.MmCorpus.serialize(outf('pmi_matrix.mm'), raw2ppmi(raw, word2id, k_shift=NEGATIVE or 1))
                 del raw
-
+            logger.info("PMI model not found, creating")
             model = PmiModel(gensim.corpora.MmCorpus(outf('pmi_matrix.mm')))
             model.word2id = word2id
             model.id2word = id2word
