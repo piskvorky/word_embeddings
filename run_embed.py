@@ -39,7 +39,7 @@ NEGATIVE = 10  # 0 for plain hierarchical softmax (no negative sampling)
 
 logger = logging.getLogger("run_embed")
 
-import pyximport; pyximport.install()
+import pyximport; pyximport.install(setup_args={'include_dirs': numpy.get_include()})
 from cooccur_matrix import get_cooccur
 
 
